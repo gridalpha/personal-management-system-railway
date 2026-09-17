@@ -73,6 +73,15 @@ http {
         add_header Access-Control-Max-Age        "3600" always;
         add_header X-Content-Type-Options        "nosniff" always;
 
+        # The SPA verifies every JWT signature against a public key baked into its
+        # bundle, so it has to be told this deployment's key rather than the one upstream
+        # commits. Serving a public key is safe by definition; the frontend container
+        # reads it over the private network at boot.
+        location = /jwt_public_key {
+            default_type text/plain;
+            alias /application/config/jwt/prod/public.pem;
+        }
+
         # Dependency probe served from outside the docroot, on a path healthcheckPath
         # accepts (no '-' and no '.'). The app's own routes always answer 200 because a
         # kernel.response listener rewrites every status, so they prove nothing.

@@ -18,6 +18,13 @@ RUN tar -xzf /tmp/pms-front.tar.gz -C /app --strip-components=1 \
 RUN sed -i 's|^VITE_BACKEND_BASE_URL=.*|VITE_BACKEND_BASE_URL=__PMS_BACKEND_URL__|' .env.production \
     && grep -qx 'VITE_BACKEND_BASE_URL=__PMS_BACKEND_URL__' .env.production
 
+# The SPA verifies every JWT signature against the public key in this file, and upstream
+# commits the one matching its own private key. A deployment that generates its own
+# keypair - which this one does, so the signing key is not a published secret - has to
+# hand the SPA its own public key at runtime instead.
+RUN printf '{\n  "publicSecretKey": "__PMS_JWT_PUBLIC_KEY__"\n}\n' > src/config/prod/jwt.json \
+    && grep -q '__PMS_JWT_PUBLIC_KEY__' src/config/prod/jwt.json
+
 # The repo ships a stale dist/; it must not survive into the image.
 RUN rm -rf /app/dist
 
@@ -29,14 +36,17 @@ RUN chmod +x build-assets.sh prepare-prod.sh && npm run build \
 
 FROM nginx:1.27-alpine
 
-RUN apk add --no-cache gzip
+RUN apk add --no-cache gzip python3 curl
 
 COPY --from=build /app/dist /opt/pms-front/dist
+COPY frontend/substitute.py /opt/pms-front/substitute.py
 COPY frontend/nginx.conf.template /etc/nginx/nginx.conf.template
 COPY frontend/entrypoint.sh /usr/local/bin/pms-front-entrypoint.sh
 RUN chmod +x /usr/local/bin/pms-front-entrypoint.sh \
     && sh -n /usr/local/bin/pms-front-entrypoint.sh \
-    && test -f /opt/pms-front/dist/index.html
+    && python3 -c 'import ast,sys; ast.parse(open("/opt/pms-front/substitute.py").read())' \
+    && test -f /opt/pms-front/dist/index.html \
+    && grep -rq '__PMS_JWT_PUBLIC_KEY__' /opt/pms-front/dist
 
 EXPOSE 8080
 
