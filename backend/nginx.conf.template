@@ -46,22 +46,30 @@ http {
         root /application/public;
         index index.php;
 
-        # The SPA is a separate Railway service, so every API call is cross-origin. The
-        # app adds CORS headers from a kernel.response listener, but the responses the
-        # security firewall produces never reach it: a successful POST /login comes back
-        # with the JWT and no Access-Control-Allow-Origin, so the browser discards it and
-        # the login silently does nothing, and a failed one 401s the same way. Strip
-        # whatever the app did emit and state them once here, on every response including
-        # errors. Safe as `*` because this API authenticates with a bearer token, never a
-        # cookie, so no request is credentialed.
+        # The SPA is a separate Railway service, so every API call is cross-origin, and
+        # the app's own CORS headers do not survive two situations:
+        #
+        #   * Responses the security firewall produces never reach the kernel.response
+        #     listener that adds them, so a successful POST /login came back with the JWT
+        #     and no Access-Control-Allow-Origin at all - the browser discarded it and the
+        #     login silently did nothing.
+        #   * The app answers `Access-Control-Allow-Headers: *`, and the Fetch spec
+        #     excludes `Authorization` from that wildcard. This SPA sets
+        #     `Authorization: Bearer <token>` and a custom `Caller` header on *every*
+        #     request, so every preflight failed and no call ever reached JavaScript.
+        #
+        # Strip whatever the app emitted and state these once here, on every response
+        # including errors, naming Authorization explicitly. `*` is safe for the origin
+        # because this API authenticates with a bearer token, never a cookie, so no
+        # request is credentialed.
         fastcgi_hide_header Access-Control-Allow-Origin;
         fastcgi_hide_header Access-Control-Allow-Headers;
         fastcgi_hide_header Access-Control-Allow-Methods;
         fastcgi_hide_header Access-Control-Expose-Headers;
         add_header Access-Control-Allow-Origin   "*" always;
-        add_header Access-Control-Allow-Headers  "*" always;
+        add_header Access-Control-Allow-Headers  "Authorization, Caller, Content-Type, Accept, Origin, X-Requested-With, is-system-disabled, is-system-soon-disabled" always;
         add_header Access-Control-Allow-Methods  "GET, POST, PUT, PATCH, DELETE, OPTIONS" always;
-        add_header Access-Control-Expose-Headers "*" always;
+        add_header Access-Control-Expose-Headers "Authorization, is-system-disabled, is-system-soon-disabled" always;
         add_header Access-Control-Max-Age        "3600" always;
         add_header X-Content-Type-Options        "nosniff" always;
 
