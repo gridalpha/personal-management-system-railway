@@ -1,0 +1,70 @@
+daemon off;
+user nginx;
+
+# Railway reports the 48-core host, not the container's CPU quota.
+worker_processes 2;
+error_log /dev/stderr notice;
+pid /var/run/nginx-pms-front.pid;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    include       /etc/nginx/mime.types;
+    default_type  application/octet-stream;
+
+    access_log /dev/stdout;
+    sendfile on;
+    tcp_nopush on;
+    keepalive_timeout 65;
+    server_tokens off;
+    absolute_redirect off;
+
+    gzip on;
+    gzip_min_length 1024;
+    gzip_vary on;
+    gzip_types text/css text/plain text/javascript application/javascript application/json image/svg+xml;
+
+    # The build script writes .js.gz siblings; the entrypoint rebuilds them after it
+    # substitutes the backend URL, so serving them cannot ship a stale origin.
+    gzip_static on;
+
+    server {
+        listen ${PORT} default_server;
+        listen [::]:${PORT} default_server;
+
+        root /srv/www;
+        index index.html;
+
+        # An add_header inside a location drops every inherited one, so each block that
+        # sets Cache-Control restates the security headers.
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+        location = /healthz {
+            add_header Content-Type "text/plain";
+            return 200 "ok\n";
+        }
+
+        location /assets/ {
+            add_header X-Content-Type-Options "nosniff" always;
+            add_header X-Frame-Options "SAMEORIGIN" always;
+            add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+            add_header Cache-Control "public, max-age=31536000, immutable" always;
+            try_files $uri =404;
+        }
+
+        location = /index.html {
+            add_header X-Content-Type-Options "nosniff" always;
+            add_header X-Frame-Options "SAMEORIGIN" always;
+            add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+            add_header Cache-Control "no-store" always;
+        }
+
+        location / {
+            try_files $uri $uri/ /index.html;
+        }
+    }
+}
