@@ -26,7 +26,13 @@ function pms_probe(): array
         return [false, 'bad-database-url'];
     }
 
+    // The entrypoint waits on the server itself, before doctrine:database:create has
+    // run - connecting to the named database there would fail 1049 on every attempt.
     $name = isset($parts['path']) ? ltrim($parts['path'], '/') : '';
+    if (getenv('PMS_HEALTH_SERVER_ONLY') === '1') {
+        $name = '';
+    }
+
     $dsn  = sprintf(
         'mysql:host=%s;port=%d;charset=utf8mb4%s',
         $parts['host'],

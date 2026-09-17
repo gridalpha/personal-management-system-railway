@@ -81,7 +81,7 @@ mkdir -p "${APP_DIR}/var"
 log "waiting for the database"
 db_ready=0
 for i in $(seq 1 60); do
-  if php /opt/pms/healthz.php > /dev/null 2>&1; then
+  if PMS_HEALTH_SERVER_ONLY=1 php /opt/pms/healthz.php > /dev/null 2>&1; then
     log "database reachable after attempt ${i}"
     db_ready=1
     break
