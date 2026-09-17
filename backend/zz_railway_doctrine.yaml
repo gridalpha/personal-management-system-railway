@@ -1,0 +1,14 @@
+# Railway's managed MySQL is 9.x, whose default sql_mode carries ONLY_FULL_GROUP_BY.
+# Upstream develops against MariaDB, which does not: migration 20200912025220 moves
+# goals into the todo module with an `INSERT ... SELECT m.id, g.name ... GROUP BY g.id`
+# and dies on `1055 Expression #1 of SELECT list is not in GROUP BY clause`, taking
+# the whole schema with it. The app's own reporting queries have the same shape, so a
+# per-connection init command is the fix rather than a one-off repair of that migration.
+#
+# The mode below is MySQL's own default minus ONLY_FULL_GROUP_BY, which is what
+# MariaDB 11.5 - the version upstream's compose file runs - effectively applies.
+# 1002 is PDO::MYSQL_ATTR_INIT_COMMAND; doctrine/dbal 2 maps `options` to driverOptions.
+doctrine:
+    dbal:
+        options:
+            1002: "SET SESSION sql_mode='STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'"

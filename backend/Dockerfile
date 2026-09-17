@@ -59,6 +59,11 @@ WORKDIR /application
 COPY backend/RailwayCreateFirstUserCommand.php /application/src/Command/RailwayCreateFirstUserCommand.php
 RUN php -l /application/src/Command/RailwayCreateFirstUserCommand.php
 
+# Kernel::configureContainer globs config/packages/*.yaml, so this merges into the
+# Doctrine configuration without patching the file upstream ships.
+COPY backend/zz_railway_doctrine.yaml /application/config/packages/zz_railway_doctrine.yaml
+RUN grep -q '1002:' /application/config/packages/zz_railway_doctrine.yaml
+
 RUN composer install --no-interaction --no-progress --ignore-platform-reqs --optimize-autoloader \
     && composer dump-autoload --no-interaction --ignore-platform-reqs --optimize \
     && rm -rf /root/.composer/cache
