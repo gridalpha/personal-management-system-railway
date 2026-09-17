@@ -7,6 +7,11 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 # Runtime + build dependencies. Nothing is purged afterwards: `apt-get purge --auto-remove`
 # on the -dev packages also takes the shared libraries the compiled PHP extensions link against.
+#
+# `tree` is load-bearing, not a convenience: ShellTreeService shells out to it, so without
+# it the Files, Images and Video modules list nothing and only log a CRITICAL, on a
+# container that is otherwise perfectly healthy. `mariadb-client` is what the app's own
+# backup command execs.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates \
         curl \
@@ -16,6 +21,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         gettext-base \
         openssl \
         procps \
+        tree \
+        mariadb-client \
         libicu-dev \
         libzip-dev \
         libpng-dev \
@@ -38,6 +45,7 @@ RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
 RUN yes '' | pecl install apcu && docker-php-ext-enable apcu
 
 # OPcache registers itself as "Zend OPcache", never "opcache".
+RUN command -v tree && command -v mariadb-dump
 RUN php -r 'exit(extension_loaded("Zend OPcache") && extension_loaded("apcu") && extension_loaded("intl") && extension_loaded("pdo_mysql") && extension_loaded("gd") && extension_loaded("zip") ? 0 : 1);'
 
 COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
