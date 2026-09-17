@@ -1,14 +1,19 @@
-# Railway's managed MySQL is 9.x, whose default sql_mode carries ONLY_FULL_GROUP_BY.
-# Upstream develops against MariaDB, which does not: migration 20200912025220 moves
-# goals into the todo module with an `INSERT ... SELECT m.id, g.name ... GROUP BY g.id`
-# and dies on `1055 Expression #1 of SELECT list is not in GROUP BY clause`, taking
-# the whole schema with it. The app's own reporting queries have the same shape, so a
-# per-connection init command is the fix rather than a one-off repair of that migration.
+# Railway's managed MySQL is 9.x. Its default sql_mode differs from the MariaDB 11.5
+# upstream develops against in two ways that break this app's migrations outright:
 #
-# The mode below is MySQL's own default minus ONLY_FULL_GROUP_BY, which is what
-# MariaDB 11.5 - the version upstream's compose file runs - effectively applies.
+#   * ONLY_FULL_GROUP_BY - migration 20200912025220 moves goals into the todo module
+#     with `INSERT ... SELECT m.id, g.name ... GROUP BY g.id` and dies on
+#     `1055 Expression #1 of SELECT list is not in GROUP BY clause`.
+#   * the strict string-to-integer conversion - migration 20210220131953 seeds calendar
+#     colours with `RAND(md5(name))`, where RAND() wants an integer seed, and dies on
+#     `1292 Truncated incorrect INTEGER value`.
+#
+# The mode is an environment variable so the entrypoint can run the migrations under a
+# permissive one and leave the serving process on a strict, MariaDB-equivalent mode -
+# relaxing it for the life of the deployment would silently truncate real writes.
+#
 # 1002 is PDO::MYSQL_ATTR_INIT_COMMAND; doctrine/dbal 2 maps `options` to driverOptions.
 doctrine:
     dbal:
         options:
-            1002: "SET SESSION sql_mode='STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'"
+            1002: "SET SESSION sql_mode='%env(PMS_MYSQL_SQL_MODE)%'"

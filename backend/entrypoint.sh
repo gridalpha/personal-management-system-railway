@@ -15,6 +15,14 @@ log() { echo "[pms-entrypoint] $*"; }
 : "${VIDEOS_UPLOAD_DIR:=upload/videos}"
 : "${MINIATURES_UPLOAD_DIR:=upload/miniatures}"
 
+# Serving mode: MySQL 9 defaults minus ONLY_FULL_GROUP_BY, which is what MariaDB 11.5 -
+# the database upstream develops against - effectively applies. Migration mode drops the
+# strict conversion checks too, because two of this app's data migrations rely on
+# MariaDB coercions MySQL 9 rejects. See backend/zz_railway_doctrine.yaml.
+: "${PMS_MYSQL_SQL_MODE:=STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION}"
+: "${PMS_MYSQL_MIGRATION_SQL_MODE:=NO_ENGINE_SUBSTITUTION}"
+export PMS_MYSQL_SQL_MODE
+
 APP_DIR=/application
 DATA_DIR="${RAILWAY_VOLUME_MOUNT_PATH}"
 CONSOLE="php ${APP_DIR}/bin/console"
@@ -103,9 +111,9 @@ log "generating the JWT key pair if none exists yet"
 ${CONSOLE} lexik:jwt:generate-keypair --skip-if-exists --no-interaction
 
 if [ "${PMS_ROLE}" = "web" ]; then
-  log "running database migrations"
-  ${CONSOLE} doctrine:database:create --if-not-exists --no-interaction
-  ${CONSOLE} doctrine:migrations:migrate --no-interaction --allow-no-migration
+  log "running database migrations under sql_mode '${PMS_MYSQL_MIGRATION_SQL_MODE}'"
+  PMS_MYSQL_SQL_MODE="${PMS_MYSQL_MIGRATION_SQL_MODE}" ${CONSOLE} doctrine:database:create --if-not-exists --no-interaction
+  PMS_MYSQL_SQL_MODE="${PMS_MYSQL_MIGRATION_SQL_MODE}" ${CONSOLE} doctrine:migrations:migrate --no-interaction --allow-no-migration
 
   # Registration is open to anyone until the first active user exists, so this has to
   # happen before anything binds the public port - not in a background subshell.
