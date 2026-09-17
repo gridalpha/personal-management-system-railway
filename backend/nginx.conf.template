@@ -46,6 +46,25 @@ http {
         root /application/public;
         index index.php;
 
+        # The SPA is a separate Railway service, so every API call is cross-origin. The
+        # app adds CORS headers from a kernel.response listener, but the responses the
+        # security firewall produces never reach it: a successful POST /login comes back
+        # with the JWT and no Access-Control-Allow-Origin, so the browser discards it and
+        # the login silently does nothing, and a failed one 401s the same way. Strip
+        # whatever the app did emit and state them once here, on every response including
+        # errors. Safe as `*` because this API authenticates with a bearer token, never a
+        # cookie, so no request is credentialed.
+        fastcgi_hide_header Access-Control-Allow-Origin;
+        fastcgi_hide_header Access-Control-Allow-Headers;
+        fastcgi_hide_header Access-Control-Allow-Methods;
+        fastcgi_hide_header Access-Control-Expose-Headers;
+        add_header Access-Control-Allow-Origin   "*" always;
+        add_header Access-Control-Allow-Headers  "*" always;
+        add_header Access-Control-Allow-Methods  "GET, POST, PUT, PATCH, DELETE, OPTIONS" always;
+        add_header Access-Control-Expose-Headers "*" always;
+        add_header Access-Control-Max-Age        "3600" always;
+        add_header X-Content-Type-Options        "nosniff" always;
+
         # Dependency probe served from outside the docroot, on a path healthcheckPath
         # accepts (no '-' and no '.'). The app's own routes always answer 200 because a
         # kernel.response listener rewrites every status, so they prove nothing.
